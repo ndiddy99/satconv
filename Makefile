@@ -1,7 +1,7 @@
 CC = gcc
 
 TARGET = satconv
-CFLAGS = -g -std=gnu99 -Wall -DEZXML_NOMMAP
+CFLAGS = -g -std=gnu99 -Wall -fsanitize=address -DEZXML_NOMMAP
 
 OBJECTS = satconv.o ezxml.o qdbmp.o map.o sprite.o tile.o
 

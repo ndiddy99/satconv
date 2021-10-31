@@ -31,6 +31,8 @@
 #include "qdbmp.h"
 #include "sprite.h"
 
+#define  RGB16_COLOR(r,g,b) (((b)<<10) + ((g)<<5) + (r) + 0x8000)
+
 #define PALETTE_SIZE (16)
 static uint32_t **palette_list;
 static int palette_cursor;
@@ -45,11 +47,9 @@ typedef struct {
 static IMAGE_INFO *info_list;
 static int info_cursor;
 
-void sprite_convert(BMP *tile) {
+void Sprite_Convert4BPP(BMP *tile) {
 	uint32_t palette_buffer[PALETTE_SIZE];
-	uint8_t r;
-	uint8_t g;
-	uint8_t b;
+	uint8_t r, g, b;
 	
 	IMAGE_INFO *info = &info_list[info_cursor];
 	info_cursor++;
@@ -100,9 +100,32 @@ void sprite_convert(BMP *tile) {
 	}
 }
 
+void Sprite_ConvertRGB(BMP *tile) {
+	uint8_t r, g, b;
+	uint16_t color;
+
+	IMAGE_INFO *info = &info_list[info_cursor];
+	info_cursor++;
+	info->x = BMP_GetWidth(tile);
+	info->y = BMP_GetHeight(tile);
+	info->graphics = malloc(info->x * info->y * 2);
+
+	int graphicsCursor = 0;
+	for (int y = 0; y < info->y; y++) {
+		for (int x = 0; x < info->x; x++) {
+			BMP_GetPixelRGB(tile, x, y, &r, &g, &b);
+			r >>= 3; g >>= 3; b >>= 3;
+			color = RGB16_COLOR(r, g, b);
+			color = htons(color);
+			memcpy(&(info->graphics[graphicsCursor]), &color, sizeof(color));
+			graphicsCursor += 2;
+		}
+	}
+}
+
 #define FILENAME_BUFLEN (256)
 
-int sprite_process(char *dirname, char *outname) {
+int sprite_process(char *dirname, char *outname, int type) {
 	struct dirent *entry;
 	DIR *dir_ptr;
 	palette_cursor = 0;
@@ -117,7 +140,7 @@ int sprite_process(char *dirname, char *outname) {
 		return 0;
 	}
 	while ((entry = readdir(dir_ptr)) != NULL) {
-		if ((strcmp(entry->d_name, ".") == 0) || (strcmp(entry->d_name, "..") == 0)) {
+		if ((entry->d_name[0] == '.') || (strcmp(entry->d_name, "..") == 0)) {
 			continue;
 		}
 		if (entry->d_type == DT_REG) {
@@ -128,9 +151,11 @@ int sprite_process(char *dirname, char *outname) {
 	
 	// allocate memory based on the number of files
 	// the maximum number of palettes possible is one per frame
-	palette_list = malloc(num_files * sizeof(uint32_t *));
-	for (int i = 0; i < num_files; i++) {
-		palette_list[i] = malloc(PALETTE_SIZE * sizeof(uint32_t));
+	if (type == SPRITE_4BPP) {
+		palette_list = malloc(num_files * sizeof(uint32_t *));
+		for (int i = 0; i < num_files; i++) {
+			palette_list[i] = malloc(PALETTE_SIZE * sizeof(uint32_t));
+		}
 	}
 	info_list = malloc(num_files * sizeof(IMAGE_INFO));
 	
@@ -141,15 +166,21 @@ int sprite_process(char *dirname, char *outname) {
 			printf("Error: overran filename buffer by %d bytes. Increase FILENAME_BUFLEN define in sprite.c.\n", retval);
 			return 0;
 		}
+		printf("Reading %d %s\n", type, filename);
 		BMP *tiledata = BMP_ReadFile(filename);
 		BMP_CHECK_ERROR(stdout, 0);
-		if (BMP_GetDepth(tiledata) != 4) {
-			printf("Error: file %s isn't 4bpp.\n", entry->d_name);
-			BMP_Free(tiledata);
-			closedir(dir_ptr);
-			return 0;
+		if (type == SPRITE_4BPP) {
+			if (BMP_GetDepth(tiledata) != 4) {
+				printf("Error: file %s isn't 4bpp.\n", entry->d_name);
+				BMP_Free(tiledata);
+				closedir(dir_ptr);
+				return 0;
+			}
+			Sprite_Convert4BPP(tiledata);
 		}
-		sprite_convert(tiledata);
+		else {
+			Sprite_ConvertRGB(tiledata);
+		}
 		BMP_Free(tiledata);
 	}
 	// write out the sprite data
@@ -165,9 +196,15 @@ int sprite_process(char *dirname, char *outname) {
 		return 0;
 	}
 	// saturn is big-endian so all the data over one byte must be byteswapped
+	// write type
+	int type_be = htonl(type);
+	fwrite(&type_be, sizeof(type_be), 1, out);
+
 	// write number of palettes
-	int palette_cursor_be = htonl(palette_cursor);
-	fwrite(&palette_cursor_be, sizeof(palette_cursor_be), 1, out);
+	if (type == SPRITE_4BPP) {
+		int palette_cursor_be = htonl(palette_cursor);
+		fwrite(&palette_cursor_be, sizeof(palette_cursor_be), 1, out);
+	}
 	// write all the palettes (they're already byteswapped)
 	for (int i = 0; i < palette_cursor; i++) {
 		printf("Writing palette %d\n", i);
@@ -181,16 +218,23 @@ int sprite_process(char *dirname, char *outname) {
 	for (int i = 0; i < num_files; i++) {
 		tmp_x = htonl(info_list[i].x);
 		tmp_y = htonl(info_list[i].y);
-		tmp_pal = htonl(info_list[i].pal);
 		fwrite(&tmp_x, sizeof(tmp_x), 1, out);
 		fwrite(&tmp_y, sizeof(tmp_y), 1, out);
-		fwrite(&tmp_pal, sizeof(tmp_pal), 1, out);
-		fwrite(info_list[i].graphics, sizeof(uint8_t), (info_list[i].x >> 1) * info_list[i].y, out);
+		if (type == SPRITE_4BPP) {
+			tmp_pal = htonl(info_list[i].pal);
+			fwrite(&tmp_pal, sizeof(tmp_pal), 1, out);
+			fwrite(info_list[i].graphics, sizeof(uint8_t), (info_list[i].x >> 1) * info_list[i].y, out);
+		}
+		else if (type == SPRITE_RGB) {
+			fwrite(info_list[i].graphics, sizeof(uint8_t), info_list[i].x * info_list[i].y * 2, out);
+		}
 	}
 	fclose(out);	
 	// clean up memory
 	for (int i = 0; i < num_files; i++) {
-		free(palette_list[i]);
+		if (type == SPRITE_4BPP) {
+			free(palette_list[i]);
+		}
 		free(info_list[i].graphics);
 	}
 	free(palette_list);

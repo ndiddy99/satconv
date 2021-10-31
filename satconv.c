@@ -47,21 +47,40 @@ int main(int argc, char **argv) {
 		char *infile;
 		char *ext;
 		int ext_index;
+		int type;
 		#define OUTFILE_LEN (32)
 		char outfile[OUTFILE_LEN];
+
 		switch(line[0]) {
 			// sprite directory
 			case 's':
-				infile = &line[2];
+			case 'S':
+				switch(line[1]) {
+					case '4':
+						type = SPRITE_4BPP;
+						break;
+
+					case 'r':
+					case 'R':
+						type = SPRITE_RGB;
+						break;
+
+					default:
+						printf("Invalid sprite type %c\nBad line: %s\n", line[1], line);
+						continue;
+				}
+
+				infile = &line[3];
 				// cd-rom filesystem only allows 8.3 filenames
 				ext_index = MIN(8, strlen(infile));
 				memcpy(outfile, infile, ext_index);
 				strcpy(outfile + ext_index, ".spr");
-				sprite_process(infile, outfile);
+				sprite_process(infile, outfile, type);
 				break;
 			
 			// tile graphics
 			case 't':
+			case 'T':
 				infile = &line[3];
 				ext = strchr(infile, '.');
 				ext_index = MIN(8, ext - infile);
@@ -72,6 +91,7 @@ int main(int argc, char **argv) {
 			
 			// tilemap
 			case 'm':
+			case 'M':
 				infile = &line[4];
 				ext = strchr(infile, '.');
 				ext_index = MIN(8, ext - infile);

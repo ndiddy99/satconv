@@ -2,8 +2,13 @@ Satconv is free software and is GPLv3+ licensed.
 
 ---Satconv asset list file format---
 
-s directory: Reads all the .bmp images in the named directory and outputs a
-             .spr file.
+s4 directory: Reads all the .bmp images in the named directory and outputs a
+              palette .spr file. All files must be in numerical order starting
+              at 0.
+
+sr directory: Reads all the .bmp images in the named directory and outputs an
+              RGB .spr file. All files must be in numerical order starting
+              at 0.
 
 m41 map.tmx: Converts map.tmx (Tiled XML) to a .map file (4bpp graphics and SCL_PN_10BIT format)
 m42 map.tmx: Converts map.tmx (Tiled XML) to a .map file (4bpp graphics and 2 word format)
@@ -14,7 +19,8 @@ t0 file.bmp: Converts file.bmp to a framebuffer graphics file
 t1 file.bmp: Converts file.bmp to a .tle file (8x8 tile size)
 t2 file.bmp: Converts file.bmp to a .tle file (16x16 tile size)
 
----spr file format---
+---palette spr file format---
+4 bytes: 0x0000
 4 bytes: number of palettes
 n bytes: palette data
 4 bytes: number of sprites
@@ -22,6 +28,14 @@ n bytes: palette data
 4 bytes: sprite x size
 4 bytes: sprite y size
 4 bytes: sprite palette number
+n bytes: sprite tile data
+
+---rgb spr file format---
+4 bytes: 0x0001
+4 bytes: number of sprites
+--- each sprite entry ---
+4 bytes: sprite x size
+4 bytes: sprite y size
 n bytes: sprite tile data
 
 ---map file format---

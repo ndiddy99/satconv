@@ -442,6 +442,7 @@ USHORT BMP_GetDepth( BMP* bmp )
 void BMP_GetPixelRGB( BMP* bmp, UINT x, UINT y, UCHAR* r, UCHAR* g, UCHAR* b )
 {
 	UCHAR*	pixel;
+    UCHAR   pixel_index;
 	UINT	bytes_per_row;
 	UCHAR	bytes_per_pixel;
 
@@ -465,7 +466,24 @@ void BMP_GetPixelRGB( BMP* bmp, UINT x, UINT y, UCHAR* r, UCHAR* g, UCHAR* b )
 		/* In indexed color mode the pixel's value is an index within the palette */
 		if ( bmp->Palette != NULL )
 		{
-			pixel = bmp->Palette + *pixel * 4; //TODO - por para 4bpp
+            if (bmp->Header.BitsPerPixel == 8) {
+                pixel = bmp->Palette + *pixel * 4;
+            }
+            else if (bmp->Header.BitsPerPixel == 4) {
+                pixel_index = bmp->Data[((bmp->Header.Height - y - 1 ) * bytes_per_row) + (x / 2)];
+                printf("full index: 0x%02x ", pixel_index);
+                if (x % 2 == 0) { // odd pixels
+                    printf(" odd ");
+                    pixel_index >>= 4;
+                    pixel_index &= 0xf;
+                }
+                else { // even pixels
+                    printf(" even ");
+                    pixel_index &= 0xf;
+                }
+                printf("4bpp! x: %lu, y: %lu, index: %d\n", x, y, pixel_index);
+                pixel = bmp->Palette + (pixel_index * 4);
+            }
 		}
 
 		/* Note: colors are stored in BGR order */
