@@ -471,17 +471,13 @@ void BMP_GetPixelRGB( BMP* bmp, UINT x, UINT y, UCHAR* r, UCHAR* g, UCHAR* b )
             }
             else if (bmp->Header.BitsPerPixel == 4) {
                 pixel_index = bmp->Data[((bmp->Header.Height - y - 1 ) * bytes_per_row) + (x / 2)];
-                printf("full index: 0x%02x ", pixel_index);
-                if (x % 2 == 0) { // odd pixels
-                    printf(" odd ");
+                if (x % 2 == 0) {
                     pixel_index >>= 4;
                     pixel_index &= 0xf;
                 }
-                else { // even pixels
-                    printf(" even ");
+                else { 
                     pixel_index &= 0xf;
                 }
-                printf("4bpp! x: %lu, y: %lu, index: %d\n", x, y, pixel_index);
                 pixel = bmp->Palette + (pixel_index * 4);
             }
 		}
